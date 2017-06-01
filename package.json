@@ -16,6 +16,7 @@
         "http": "latest",
         "fs": "latest",
         "cheerio": "latest",
-        "request": "latest"
+        "request": "latest",
+        "mysql": "latest"
     }
 }
