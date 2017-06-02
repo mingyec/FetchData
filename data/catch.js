@@ -3,6 +3,7 @@ var http = require('http');
 var fs = require('fs');
 var request = require('request');
 var cheerio = require('cheerio');
+var mysql = require('mysql');
 
 //catch
 var fetch_num = 0;
@@ -61,3 +62,24 @@ function loopCatch() {
 
 loopCatch();
 fetchData(url);
+
+
+//连接mysql测试
+var connection = mysql.createConnection({
+    host: 'localhost',
+    user: 'root',
+    password: '123456',
+    database: 'gx_cloud_dev'
+});
+
+connection.connect();
+
+var queryStr = 'select * from sys_roles';
+connection.query(queryStr, function(err, results, fields) {
+    if (err) {
+        console.error(err);
+    } else {
+        console.info(typeof results)
+            // console.info(JSON.stringify(results));
+    }
+})
