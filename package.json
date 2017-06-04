@@ -17,6 +17,8 @@
         "fs": "latest",
         "cheerio": "latest",
         "request": "latest",
-        "mysql": "latest"
+        "mysql": "latest",
+        "moment": "latest",
+        "node-schedule": "latest"
     }
 }
