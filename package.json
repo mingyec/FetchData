@@ -19,6 +19,7 @@
         "request": "latest",
         "mysql": "latest",
         "moment": "latest",
-        "node-schedule": "latest"
+        "node-schedule": "latest",
+        "nodemailer": "latest"
     }
 }

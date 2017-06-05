@@ -6,6 +6,7 @@ var cheerio = require('cheerio');
 var mysql = require('mysql');
 var moment = require('moment');
 var schedule = require('node-schedule');
+var nodemailer = require('nodemailer');
 
 //连接mysql测试
 var config = {
@@ -19,6 +20,7 @@ var connection = mysql.createConnection(config);
 connection.connect();
 
 connection.on('error', function(err) {
+    sendEmail('<b>数据库崩溃，原因：</b><br/>' + JSON.stringify(err));
     if (!err.fatal) return;
 
     if (err.code != 'PROTOCOL_CONNECTION_LOST') {
@@ -27,10 +29,17 @@ connection.on('error', function(err) {
 
     connection = mysql.createConnection(config);
     connection.connect();
-})
+});
 
-var url = 'http://m.weathercn.com/current-weather.do?partner=&id=2332592&language=zh-cn';
-var f_url = 'http://m.weathercn.com/hourly-weather-forecast.do?partner=&language=zh-cn&id=2332592';
+var transporter = nodemailer.createTransport({
+    service: 'qq',
+    port: '465',
+    secureConnection: true,
+    auth: {
+        user: '916468386@qq.com', //这里密码不是qq密码，是你设置的smtp密码 
+        pass: 'ltrvclzywylobeff'
+    }
+});
 
 //抓取当前数据
 function fetchData(url) {
@@ -67,8 +76,9 @@ function fetchData(url) {
                 let realFeel = $('.rfeel>b').text();
 
                 let meteoData = [fetchTime, local, temp, hum, dew, wind_speed, wind_direc, realFeel];
-                // insertSql(meteoData);
+                insertSql(meteoData);
             } catch (error) {
+                sendEmail('<b>抓取实时数据错误，原因：</b><br/>' + JSON.stringify(error));
                 console.error(error);
             }
 
@@ -83,26 +93,33 @@ function forecastData(f_url) {
             html += chunk;
         });
         res.on('end', function() {
-            var $ = cheerio.load(html);
-            let local = $('#current>h2>a').text();
-            let nowTime = moment().format('Y-MM-DD');
-            let tempArr = [local, nowTime],
-                sqlStr = '',
-                sqlVal = '';
-            for (let i = 0, max = 24; i < max; i++) {
-                let num = i < 10 ? '0' + i : i;
-                let ref = '#hour' + num;
-                let dd = $(ref).children('a').children('dl').children('dd');
-                let temp = dd.children('strong').text();
-                tempArr.push(temp);
-                sqlStr = sqlStr + ',temp_' + num;
-                sqlVal = i < 23 ? sqlVal + '?,' : sqlVal + '?';
+            try {
+                var $ = cheerio.load(html);
+                let local = $('#current>h2>a').text();
+                let nowTime = moment().format('Y-MM-DD');
+                let tempArr = [local, nowTime],
+                    sqlStr = '',
+                    sqlVal = '';
+                for (let i = 0, max = 24; i < max; i++) {
+                    let num = i < 10 ? '0' + i : i;
+                    let ref = '#hour' + num;
+                    let dd = $(ref).children('a').children('dl').children('dd');
+                    let temp = dd.children('strong').text();
+                    tempArr.push(temp);
+                    sqlStr = sqlStr + ',temp_' + num;
+                    sqlVal = i < 23 ? sqlVal + '?,' : sqlVal + '?';
+                }
+                insertFcDataToSql(tempArr, sqlStr, sqlVal);
+            } catch (error) {
+                sendEmail('<b>抓取预测数据错误，原因：</b><br/>' + JSON.stringify(error));
+                console.error(error);
             }
-            insertFcDataToSql(tempArr, sqlStr, sqlVal);
+
         })
     })
 }
 
+//保存为本地邮件
 function save(data) {
     var text = JSON.stringify(data);
     fs.appendFile('./data/' + 'test.json', text, 'utf-8', function(err) {
@@ -114,18 +131,28 @@ function save(data) {
     })
 }
 
+function sendEmail(content) {
+    let mailOptions = {
+        from: '916468386@qq.com', // 发件地址 
+        to: 'mingyec@163.com', // 收件列表 
+        subject: '爬虫程序出错，请检查', // 标题 //text和html两者只支持一种 
+        // text: 'Hello world ?', // 标题 
+        html: content // html 内容 
+    };
+    transporter.sendMail(mailOptions, function(err, info) {
+        if (err) {
+            console.error(err);
+        } else {
+            console.info('邮件已发送 ' + info.response);
+        }
+    })
+}
+
 function loopCatch() {
     setInterval(function() {
         fetchData(url);
     }, 5 * 60 * 1000);
 }
-
-loopCatch();
-fetchData(url);
-/*schedule.scheduleJob('00 30 23 * * *', function() {
-    forecastData(f_url);
-})*/
-forecastData(f_url);
 
 function insertSql(data) {
     var insertStr = 'insert into real_meteorological(date_time,' +
@@ -143,8 +170,7 @@ function insertSql(data) {
 
 function insertFcDataToSql(data, tempStr, val) {
     let insertStr = 'insert into forecast_meteorological(local,forecast_day' +
-        tempStr + ') ' + 'values(' + val + ')';
-    console.log(tempStr.length, val.length);
+        tempStr + ') ' + 'values(' + val + ',?,?)';
     connection.query(insertStr, data, function(err, results) {
         if (err) {
             console.error(err);
@@ -153,3 +179,15 @@ function insertFcDataToSql(data, tempStr, val) {
         }
     })
 }
+
+function init() {
+    var url = 'http://m.weathercn.com/current-weather.do?partner=&id=2332592&language=zh-cn';
+    var f_url = 'http://m.weathercn.com/hourly-weather-forecast.do?partner=&language=zh-cn&id=2332592';
+    loopCatch();
+    fetchData(url);
+    schedule.scheduleJob('00 30 23 * * *', function() {
+        forecastData(f_url);
+    })
+}
+
+init();
