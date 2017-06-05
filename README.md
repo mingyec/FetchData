@@ -1,2 +1,2 @@
-# FetchData
-fetch temp data to test
+# 简易node爬虫
+用于定向抓取实时数据和未来24小时预测数据
