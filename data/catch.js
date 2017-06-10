@@ -4,7 +4,7 @@ var fs = require('fs');
 var request = require('request');
 var cheerio = require('cheerio');
 var mysql = require('mysql');
-var moment = require('moment');
+// var moment = require('moment');
 var schedule = require('node-schedule');
 var nodemailer = require('nodemailer');
 
@@ -37,7 +37,7 @@ var transporter = nodemailer.createTransport({
     secureConnection: true,
     auth: {
         user: '916468386@qq.com', //这里密码不是qq密码，是你设置的smtp密码 
-        pass: 'ltrvclzywylobeff'
+        pass: ''
     }
 });
 
@@ -54,6 +54,9 @@ function fetchData(url) {
             try {
                 //时间格式化
                 var DateTime = $('#current>div>a>i>div').text();
+                if (DateTime === '') {
+                    DateTime = $('#air>i>div:last-child').text();
+                }
                 var date = DateTime.split(' ');
                 var strDate = new Date().getFullYear() + '年' + date[0];
                 var fmDate = strDate.replace(/(\d{4}).(\d{1,2}).(\d{1,2}).+/mg, '$1-$2-$3');
@@ -81,7 +84,7 @@ function fetchData(url) {
                 let realFeel = realFeelVal.replace(/\°/g, '');
 
                 let meteoData = [fetchTime, local, temp, hum, dew, wind_speed, wind_direc, realFeel];
-                insertSql(meteoData);
+                // insertSql(meteoData);
             } catch (error) {
                 sendEmail('<b>抓取实时数据错误，原因：</b><br/>' + JSON.stringify(error));
                 console.error(error);
@@ -101,20 +104,29 @@ function forecastData(f_url) {
             try {
                 var $ = cheerio.load(html);
                 let local = $('#current>h2>a').text();
-                let nowTime = moment().format('Y-MM-DD');
-                let tempArr = [local, nowTime],
-                    sqlStr = '',
-                    sqlVal = '';
+                let date = new Date();
+                // let nowTime = moment().format('Y-MM-DD');
+                let month = parseInt(date.getMonth()) + 1;
+                let day = parseInt(date.getDate()) + 1;
+                let fcDate = date.getFullYear() + '-' + month + '-' + day;
+                let sqlStr = '';
                 for (let i = 0, max = 24; i < max; i++) {
                     let num = i < 10 ? '0' + i : i;
                     let ref = '#hour' + num;
                     let dd = $(ref).children('a').children('dl').children('dd');
-                    let temp = dd.children('strong').text();
-                    tempArr.push(temp);
-                    sqlStr = sqlStr + ',temp_' + num;
-                    sqlVal = i < 23 ? sqlVal + '?,' : sqlVal + '?';
+                    let dt = $(ref).children('a').children('dl').children('dt');
+                    let tempVal = dd.children('strong').text();
+                    let temp = tempVal.replace(/\°/g, '');
+                    let f_time = dt.text();
+                    let fcTime = fcDate + ' ' + f_time;
+                    let sqlVal = '(' + '"' + local + '"' + ',' + '"' + fcTime + '"' + ',' + temp + ')';
+                    if (sqlStr == "") {
+                        sqlStr = sqlVal;
+                    } else {
+                        sqlStr = sqlStr + ',' + sqlVal;
+                    }
                 }
-                // insertFcDataToSql(tempArr, sqlStr, sqlVal);
+                insertFcDataToSql(sqlStr);
             } catch (error) {
                 sendEmail('<b>抓取预测数据错误，原因：</b><br/>' + JSON.stringify(error));
                 console.error(error);
@@ -153,7 +165,7 @@ function sendEmail(content) {
     })
 }
 
-function loopCatch() {
+function loopCatch(url) {
     setInterval(function() {
         fetchData(url);
     }, 5 * 60 * 1000);
@@ -173,10 +185,11 @@ function insertSql(data) {
     });
 }
 
-function insertFcDataToSql(data, tempStr, val) {
-    let insertStr = 'insert into forecast_meteorological(local,forecast_day' +
-        tempStr + ') ' + 'values(' + val + ',?,?)';
-    connection.query(insertStr, data, function(err, results) {
+function insertFcDataToSql(data) {
+    /*let insertStr = 'insert into forecast_meteorological(local,forecast_day' +
+        tempStr + ') ' + 'values(' + val + ',?,?)';*/
+    let insertStr = 'insert into forecast_meteo(local,time,temp) values' + data;
+    connection.query(insertStr, function(err, results) {
         if (err) {
             console.error(err);
         } else {
@@ -188,11 +201,12 @@ function insertFcDataToSql(data, tempStr, val) {
 function init() {
     var url = 'http://m.weathercn.com/current-weather.do?partner=&id=2332592&language=zh-cn';
     var f_url = 'http://m.weathercn.com/hourly-weather-forecast.do?partner=&language=zh-cn&id=2332592';
-    loopCatch();
+    loopCatch(url);
     fetchData(url);
     schedule.scheduleJob('00 30 23 * * *', function() {
         forecastData(f_url);
-    })
+    });
+    // forecastData(f_url);
 }
 
 init();
