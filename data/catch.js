@@ -53,7 +53,7 @@ function fetchData(url) {
 
             try {
                 //时间格式化
-                var DateTime = $('#air>i>div:last-child').text();
+                var DateTime = $('#current>div>a>i>div').text();
                 var date = DateTime.split(' ');
                 var strDate = new Date().getFullYear() + '年' + date[0];
                 var fmDate = strDate.replace(/(\d{4}).(\d{1,2}).(\d{1,2}).+/mg, '$1-$2-$3');
@@ -61,19 +61,24 @@ function fetchData(url) {
 
                 //取得露点
                 var dewP = $('#day-part').children('p');
-                let dew = dewP[2].childNodes[1].data;
+                let dewVal = dewP[2].childNodes[1].data
+                let dew = dewVal.replace(/\°/g, '');
                 //地区、温度、湿度
                 let local = $('#current>h2>a').text();
-                let temp = $('#current>div:first-child>a>b').text();
-                let hum = $('.hum>p').text();
+                let tempVal = $('#current>div:first-child>a>b').text();
+                let temp = tempVal.replace(/\℃/g, '');
+                let humVal = $('.hum>p').text();
+                let hum = humVal.replace(/\%/g, '');
                 //风速，风向
                 let windP = $('.wind>p>span').children();
                 let wind = windP[1].prev.data.trim();
                 let windArr = wind.split(' ');
-                let wind_speed = windArr[1] + windArr[2];
+                let windSpeedVal = windArr[1] + windArr[2];
+                let wind_speed = windSpeedVal.replace(/米\/秒/g, '');
                 let wind_direc = windArr[0];
                 //体感温度
-                let realFeel = $('.rfeel>b').text();
+                let realFeelVal = $('.rfeel>b').text();
+                let realFeel = realFeelVal.replace(/\°/g, '');
 
                 let meteoData = [fetchTime, local, temp, hum, dew, wind_speed, wind_direc, realFeel];
                 insertSql(meteoData);
@@ -109,7 +114,7 @@ function forecastData(f_url) {
                     sqlStr = sqlStr + ',temp_' + num;
                     sqlVal = i < 23 ? sqlVal + '?,' : sqlVal + '?';
                 }
-                insertFcDataToSql(tempArr, sqlStr, sqlVal);
+                // insertFcDataToSql(tempArr, sqlStr, sqlVal);
             } catch (error) {
                 sendEmail('<b>抓取预测数据错误，原因：</b><br/>' + JSON.stringify(error));
                 console.error(error);
